@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-import gradio as gr
+from pydantic import BaseModel
 import google.generativeai as genai
 import os
 import requests
@@ -21,18 +21,34 @@ try:
 except requests.exceptions.RequestException:
     DR_HEALIO_PROMPT = "Dr. Healio Default Prompt"
 
+# Define request structure
+class ChatRequest(BaseModel):
+    user_input: str
+    history: list = []  # History will be sent in the request
+
 @app.get("/")
 def read_root():
     return {"message": "Dr. Healio API is running!"}
 
 @app.post("/dr_healio_chat")
-def dr_healio_chat(user_input: str, history: list = []):
+def dr_healio_chat(request: ChatRequest):
     try:
-        full_history = DR_HEALIO_PROMPT + "\n".join([f"User: {msg[0]}\nDr. Healio: {msg[1]}" for msg in history])
+        user_input = request.user_input
+        history = request.history  # Received history from the request
+
+        # Construct full history
+        full_history = DR_HEALIO_PROMPT + "\n" + "\n".join(
+            [f"User: {msg[0]}\nDr. Healio: {msg[1]}" for msg in history]
+        )
+
+        # Generate AI response
         model = genai.GenerativeModel(MODEL_NAME)
         response = model.generate_content(full_history + f"\nUser: {user_input}\nDr. Healio:")
+
+        # Append new interaction
         history.append((user_input, response.text))
-        return {"history": history}
+
+        return {"response": response.text, "history": history}
     except Exception as e:
         return {"error": str(e)}
 
