@@ -1,5 +1,5 @@
-fastapi
-uvicorn
-google-generativeai
+gradio
+gunicorn
 requests
 python-dotenv
+google-generativeai
