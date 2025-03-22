@@ -1,17 +1,18 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from pydantic import BaseModel
 import google.generativeai as genai
-from google.genai import types
 import os
 import requests
+from google.generativeai import types  # Import types for tools
 
 app = FastAPI()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-genai.configure(api_key=GEMINI_API_KEY)
+# Load API Key
+API_KEY = os.getenv("GEMINI_API_KEY")
+genai.configure(api_key=API_KEY)
+MODEL_NAME = "models/gemini-2.0-flash"
 
-MODEL_NAME = "gemini-2.0-flash"
-
+# Fetch Dr. Healio Prompt from external source
 PROMPT_URL = "https://gist.githubusercontent.com/shudveta/3286f04b7bc36a94bb9b84065fdc64a0/raw/075cd1541681d8fc8efb78cb9750d75f58c1af70/prompt.txt"
 try:
     response = requests.get(PROMPT_URL)
@@ -20,9 +21,10 @@ try:
 except requests.exceptions.RequestException:
     DR_HEALIO_PROMPT = "Dr. Healio Default Prompt"
 
+# Define request structure
 class ChatRequest(BaseModel):
     user_input: str
-    history: list = []
+    history: list = []  # History will be sent in the request
 
 @app.get("/")
 def read_root():
@@ -32,27 +34,19 @@ def read_root():
 def dr_healio_chat(request: ChatRequest):
     try:
         user_input = request.user_input
-        history = request.history
+        history = request.history  # Received history from the request
 
+        # Construct full history
         full_history = DR_HEALIO_PROMPT + "\n" + "\n".join(
             [f"User: {msg[0]}\nDr. Healio: {msg[1]}" for msg in history]
         )
 
+        # Generate AI response with Google Search tool
         model = genai.GenerativeModel(MODEL_NAME)
+        generation_config = genai.types.GenerationConfig(tools=[types.Tool(google_search=types.GoogleSearch())]) #add the google search tool.
+        response = model.generate_content(full_history + f"\nUser: {user_input}\nDr. Healio:", generation_config=generation_config) #add the generation config.
 
-        contents = [
-            types.Content(
-                role="user",
-                parts=[types.Part.from_text(text=full_history + f"\nUser: {user_input}\nDr. Healio:")],
-            ),
-        ]
-
-        tools = [types.Tool(google_search=types.GoogleSearch())]
-
-        generate_content_config = types.GenerateContentConfig(tools=tools)
-
-        response = model.generate_content(contents=contents, config=generate_content_config)
-
+        # Append new interaction
         history.append((user_input, response.text))
 
         return {"response": response.text, "history": history}
