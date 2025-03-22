@@ -2,7 +2,6 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import os
 import google.generativeai as genai
-from google.generativeai import types
 
 app = FastAPI()
 
@@ -29,26 +28,26 @@ def dr_healio_chat(request: ChatRequest):
 
         # Construct conversation history
         conversation_history = [
-            types.Content(
+            genai.types.Content(
                 role="user",
-                parts=[types.Part.from_text(text=f"User: {msg[0]}\nDr. Healio: {msg[1]}")]
+                parts=[genai.types.Part.from_text(f"User: {msg[0]}\nDr. Healio: {msg[1]}")]
             )
             for msg in history
         ]
 
         # Add the latest user input
         conversation_history.append(
-            types.Content(
+            genai.types.Content(
                 role="user",
-                parts=[types.Part.from_text(text=user_input)]
+                parts=[genai.types.Part.from_text(user_input)]
             )
         )
 
         # Define tools (Google Search Grounding)
-        tools = [types.Tool(google_search=types.GoogleSearch())]
+        tools = [genai.types.Tool(google_search=genai.types.GoogleSearch())]
 
         # Generate response with Google Search Grounding
-        generate_content_config = types.GenerateContentConfig(
+        generate_content_config = genai.types.GenerateContentConfig(
             temperature=1,
             top_p=0.95,
             top_k=40,
@@ -63,7 +62,7 @@ def dr_healio_chat(request: ChatRequest):
             config=generate_content_config,
         )
 
-        # Append new interaction
+        # Extract response text
         if response and response.candidates:
             response_text = response.candidates[0].content.parts[0].text.strip()
             history.append((user_input, response_text))
