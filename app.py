@@ -12,7 +12,12 @@ API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
     raise ValueError("GEMINI_API_KEY environment variable not set.")
 
-genai.configure(api_key=API_KEY)
+# Create the genai client
+try:
+    client = genai.Client(api_key=API_KEY)
+except Exception as e:
+    raise ValueError(f"Failed to initialize genai client: {e}")
+
 MODEL_NAME = "gemini-2.0-flash"
 
 # Fetch Dr. Healio Prompt from external source
@@ -21,7 +26,8 @@ try:
     response = requests.get(PROMPT_URL)
     response.raise_for_status()
     DR_HEALIO_PROMPT = response.text.strip()
-except requests.exceptions.RequestException:
+except requests.exceptions.RequestException as e:
+    print(f"Warning: Failed to fetch prompt, using default. Error: {e}")
     DR_HEALIO_PROMPT = "Dr. Healio Default Prompt"
 
 # Define request structure
@@ -63,7 +69,7 @@ async def dr_healio_chat(request: ChatRequest):
         )
 
         response_text = ""
-        for chunk in genai.client.models.generate_content_stream(
+        for chunk in client.models.generate_content_stream(
             model=MODEL_NAME,
             contents=contents,
             config=generate_content_config,
@@ -77,7 +83,8 @@ async def dr_healio_chat(request: ChatRequest):
         return {"response": response_text, "history": history}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error during dr_healio_chat: {e}") #Print error to logs.
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}")
 
 @app.post("/reset_chat")
 async def reset_chat():
