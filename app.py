@@ -3,13 +3,13 @@ from pydantic import BaseModel
 import google.generativeai as genai
 import os
 import requests
-from google.generativeai import types  # Import types for tools
 
 app = FastAPI()
 
 # Load API Key
 API_KEY = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=API_KEY)
+
 MODEL_NAME = "models/gemini-2.0-flash"
 
 # Fetch Dr. Healio Prompt from external source
@@ -41,41 +41,14 @@ def dr_healio_chat(request: ChatRequest):
             [f"User: {msg[0]}\nDr. Healio: {msg[1]}" for msg in history]
         )
 
-        # Generate AI response with Google Search tool (using documentation example)
-        client = genai.Client(api_key=API_KEY)  # Create a client
-        contents = [
-            types.Content(
-                role="user",
-                parts=[types.Part.from_text(text=full_history + f"\nUser: {user_input}\nDr. Healio:")],
-            ),
-        ]
-        tools = [types.Tool(google_search=types.GoogleSearch())]
-        generate_content_config = types.GenerateContentConfig(
-            temperature=1,
-            top_p=0.95,
-            top_k=40,
-            max_output_tokens=8192,
-            tools=tools,
-            response_mime_type="text/plain",
-        )
-
-        response_text = ""
-        for chunk in client.models.generate_content_stream(
-            model=MODEL_NAME,
-            contents=contents,
-            config=generate_content_config,
-        ):
-            if chunk.text:
-                response_text += chunk.text
-            if chunk.tool_use:
-              print(chunk.tool_use) #print the tool use if its present.
-            if chunk.tool_response:
-              print(chunk.tool_response) # print the tool response if its present.
+        # Generate AI response
+        model = genai.GenerativeModel(MODEL_NAME)
+        response = model.generate_content(full_history + f"\nUser: {user_input}\nDr. Healio:")
 
         # Append new interaction
-        history.append((user_input, response_text))
+        history.append((user_input, response.text))
 
-        return {"response": response_text, "history": history}
+        return {"response": response.text, "history": history}
     except Exception as e:
         return {"error": str(e)}
 
