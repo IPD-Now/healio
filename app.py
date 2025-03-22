@@ -1,80 +1,61 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import os
-from google import genai
+import google.generativeai as genai
 from google.genai import types
+import os
+import requests
 
 app = FastAPI()
 
-# Load API Key
-API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+genai.configure(api_key=GEMINI_API_KEY)
 
-# Initialize Gemini Client
-client = genai.Client(api_key=API_KEY)
+MODEL_NAME = "gemini-2.0-flash"
 
-MODEL_NAME = "gemini-1.5-pro"  # Ensure you use a model that supports Google Search Grounding
+PROMPT_URL = "https://gist.githubusercontent.com/shudveta/3286f04b7bc36a94bb9b84065fdc64a0/raw/075cd1541681d8fc8efb78cb9750d75f58c1af70/prompt.txt"
+try:
+    response = requests.get(PROMPT_URL)
+    response.raise_for_status()
+    DR_HEALIO_PROMPT = response.text.strip()
+except requests.exceptions.RequestException:
+    DR_HEALIO_PROMPT = "Dr. Healio Default Prompt"
 
-# Define request structure
 class ChatRequest(BaseModel):
     user_input: str
-    history: list = []  # History will be sent in the request
+    history: list = []
 
 @app.get("/")
 def read_root():
-    return {"message": "Dr. Healio API with Google Search Grounding is running!"}
+    return {"message": "Dr. Healio API is running!"}
 
 @app.post("/dr_healio_chat")
 def dr_healio_chat(request: ChatRequest):
     try:
         user_input = request.user_input
-        history = request.history  # Received history from the request
+        history = request.history
 
-        # Construct conversation history
-        conversation_history = [
+        full_history = DR_HEALIO_PROMPT + "\n" + "\n".join(
+            [f"User: {msg[0]}\nDr. Healio: {msg[1]}" for msg in history]
+        )
+
+        model = genai.GenerativeModel(MODEL_NAME)
+
+        contents = [
             types.Content(
                 role="user",
-                parts=[types.Part.from_text(f"User: {msg[0]}\nDr. Healio: {msg[1]}")]
-            )
-            for msg in history
+                parts=[types.Part.from_text(text=full_history + f"\nUser: {user_input}\nDr. Healio:")],
+            ),
         ]
 
-        # Add latest user input
-        conversation_history.append(
-            types.Content(
-                role="user",
-                parts=[types.Part.from_text(user_input)]
-            )
-        )
-
-        # Define tools (Google Search Grounding)
         tools = [types.Tool(google_search=types.GoogleSearch())]
 
-        # Generate response with Google Search Grounding
-        generate_content_config = types.GenerateContentConfig(
-            temperature=1,
-            top_p=0.95,
-            top_k=40,
-            max_output_tokens=8192,
-            tools=tools,
-            response_mime_type="text/plain",
-        )
+        generate_content_config = types.GenerateContentConfig(tools=tools)
 
-        # Call the Gemini model with Google Search
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=conversation_history,
-            config=generate_content_config,
-        )
+        response = model.generate_content(contents=contents, config=generate_content_config)
 
-        # Extract response text
-        if response and response.candidates:
-            response_text = response.candidates[0].content.parts[0].text.strip()
-            history.append((user_input, response_text))
-        else:
-            response_text = "Sorry, I couldn't fetch a response."
+        history.append((user_input, response.text))
 
-        return {"response": response_text, "history": history}
-
+        return {"response": response.text, "history": history}
     except Exception as e:
         return {"error": str(e)}
 
