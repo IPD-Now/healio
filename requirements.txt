@@ -1,6 +1,7 @@
-google-generativeai==0.8.4
+google-generativeai
 fastapi
 uvicorn
 requests
 python-dotenv
 gunicorn
+google-genai
