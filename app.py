@@ -9,7 +9,7 @@ app = FastAPI()
 API_KEY = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=API_KEY)
 
-MODEL_NAME = "models/gemini-2.0-flash"
+MODEL_NAME = "gemini-2.0-flash"  # Updated model supporting grounding
 
 # Define request structure
 class ChatRequest(BaseModel):
@@ -28,43 +28,35 @@ def dr_healio_chat(request: ChatRequest):
 
         # Construct conversation history
         conversation_history = [
-            genai.types.Content(
+            genai.Content(
                 role="user",
-                parts=[genai.types.Part.from_text(f"User: {msg[0]}\nDr. Healio: {msg[1]}")]
+                parts=[genai.Part.from_text(f"User: {msg[0]}\nDr. Healio: {msg[1]}")]
             )
             for msg in history
         ]
 
         # Add the latest user input
         conversation_history.append(
-            genai.types.Content(
+            genai.Content(
                 role="user",
-                parts=[genai.types.Part.from_text(user_input)]
+                parts=[genai.Part.from_text(user_input)]
             )
         )
 
         # Define tools (Google Search Grounding)
-        tools = [genai.types.Tool(google_search=genai.types.GoogleSearch())]
+        tools = [genai.Tool(google_search=genai.GoogleSearch())]
 
         # Generate response with Google Search Grounding
-        generate_content_config = genai.types.GenerateContentConfig(
-            temperature=1,
-            top_p=0.95,
-            top_k=40,
-            max_output_tokens=8192,
-            tools=tools,
-            response_mime_type="text/plain",
-        )
-
         model = genai.GenerativeModel(MODEL_NAME)
         response = model.generate_content(
             contents=conversation_history,
-            config=generate_content_config,
+            tools=tools,
+            stream=False  # Set to `True` if you want streaming responses
         )
 
         # Extract response text
-        if response and response.candidates:
-            response_text = response.candidates[0].content.parts[0].text.strip()
+        if response and response.text:
+            response_text = response.text.strip()
             history.append((user_input, response_text))
         else:
             response_text = "Sorry, I couldn't fetch a response."
