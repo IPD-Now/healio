@@ -41,19 +41,20 @@ def dr_healio_chat(request: ChatRequest):
             [f"User: {msg[0]}\nDr. Healio: {msg[1]}" for msg in history]
         )
 
-        # Generate AI response with Google Search Grounding
+        # Generate AI response with Google Search grounding
         model = genai.GenerativeModel(MODEL_NAME)
-        response = model.generate_content(full_history + f"\nUser: {user_input}\nDr. Healio:", tools=["web-search"])
-
-        # Extract AI response
-        ai_response = response.candidates[0].content.parts[0].text if response.candidates else "I'm sorry, I couldn't fetch information."
+        response = model.generate_content(
+            full_history + f"\nUser: {user_input}\nDr. Healio:",
+            generation_config={"mode": "google_search_retrieval"}  # ✅ Properly enabling search
+        )
 
         # Append new interaction
-        history.append((user_input, ai_response))
+        history.append((user_input, response.text))
 
-        return {"response": ai_response, "history": history}
+        return {"response": response.text, "history": history}
     except Exception as e:
         return {"error": str(e)}
+
 
 @app.post("/reset_chat")
 def reset_chat():
