@@ -1,16 +1,18 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-import google.generativeai as genai
-from google.genai import types
 import os
 import requests
+from google import genai
+from google.genai import types
 
 app = FastAPI()
 
-# Load API Key
+# Load API Key with error handling
 API_KEY = os.getenv("GEMINI_API_KEY")
-genai.configure(api_key=API_KEY)
+if not API_KEY:
+    raise ValueError("GEMINI_API_KEY is not set!")
 
+client = genai.Client(api_key=API_KEY)
 MODEL_NAME = "gemini-2.0-flash"
 
 # Fetch Dr. Healio Prompt from external source
@@ -25,35 +27,33 @@ except requests.exceptions.RequestException:
 # Define request structure
 class ChatRequest(BaseModel):
     user_input: str
-    history: list = []  # Chat history
+    history: list = []
 
 @app.get("/")
 def read_root():
-    return {"message": "Dr. Healio API is running!"}
+    return {"message": "Dr. Healio API with Google Search is running!"}
 
 @app.post("/dr_healio_chat")
 def dr_healio_chat(request: ChatRequest):
     try:
         user_input = request.user_input
-        history = request.history  # Received chat history
+        history = request.history  
 
         # Construct full conversation history
-        full_history = DR_HEALIO_PROMPT + "\n" + "\n".join(
-            [f"User: {msg[0]}\nDr. Healio: {msg[1]}" for msg in history]
-        )
+        full_history = f"{DR_HEALIO_PROMPT}\n" + "\n".join(
+            [f"User: {u}\nDr. Healio: {h}" for u, h in history]
+        ) + f"\nUser: {user_input}\nDr. Healio:"
 
-        # Create content structure
+        # Define AI request
         contents = [
             types.Content(
                 role="user",
-                parts=[types.Part.from_text(text=full_history + f"\nUser: {user_input}\nDr. Healio:")]
+                parts=[types.Part.from_text(text=full_history)],
             )
         ]
 
-        # Enable Google Search grounding
-        tools = [types.Tool(google_search=types.GoogleSearch())]
+        tools = [types.Tool(google_search=types.GoogleSearch())]  # Enable Google Search
 
-        # Configure generation settings
         generate_content_config = types.GenerateContentConfig(
             temperature=1,
             top_p=0.95,
@@ -63,16 +63,13 @@ def dr_healio_chat(request: ChatRequest):
             response_mime_type="text/plain",
         )
 
-        # Generate AI response with search grounding
-        client = genai.Client(api_key=API_KEY)
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=contents,
-            config=generate_content_config,
+        # Generate AI response with Google Search grounding
+        response = client.models.generate_content_stream(
+            model=MODEL_NAME, contents=contents, config=generate_content_config
         )
 
-        # Extract response text
-        ai_response = response.text if response.text else "Sorry, I couldn't find relevant information."
+        # Extract AI response safely
+        ai_response = "".join(chunk.text for chunk in response)
 
         # Append new interaction
         history.append((user_input, ai_response))
