@@ -1,15 +1,18 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 import os
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 app = FastAPI()
 
 # Load API Key
 API_KEY = os.getenv("GEMINI_API_KEY")
-genai.configure(api_key=API_KEY)
 
-MODEL_NAME = "gemini-2.0-flash"  # Updated model supporting grounding
+# Initialize Gemini Client
+client = genai.Client(api_key=API_KEY)
+
+MODEL_NAME = "gemini-1.5-pro"  # Ensure you use a model that supports Google Search Grounding
 
 # Define request structure
 class ChatRequest(BaseModel):
@@ -28,35 +31,44 @@ def dr_healio_chat(request: ChatRequest):
 
         # Construct conversation history
         conversation_history = [
-            genai.Content(
+            types.Content(
                 role="user",
-                parts=[genai.Part.from_text(f"User: {msg[0]}\nDr. Healio: {msg[1]}")]
+                parts=[types.Part.from_text(f"User: {msg[0]}\nDr. Healio: {msg[1]}")]
             )
             for msg in history
         ]
 
-        # Add the latest user input
+        # Add latest user input
         conversation_history.append(
-            genai.Content(
+            types.Content(
                 role="user",
-                parts=[genai.Part.from_text(user_input)]
+                parts=[types.Part.from_text(user_input)]
             )
         )
 
         # Define tools (Google Search Grounding)
-        tools = [genai.Tool(google_search=genai.GoogleSearch())]
+        tools = [types.Tool(google_search=types.GoogleSearch())]
 
         # Generate response with Google Search Grounding
-        model = genai.GenerativeModel(MODEL_NAME)
-        response = model.generate_content(
-            contents=conversation_history,
+        generate_content_config = types.GenerateContentConfig(
+            temperature=1,
+            top_p=0.95,
+            top_k=40,
+            max_output_tokens=8192,
             tools=tools,
-            stream=False  # Set to `True` if you want streaming responses
+            response_mime_type="text/plain",
+        )
+
+        # Call the Gemini model with Google Search
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=conversation_history,
+            config=generate_content_config,
         )
 
         # Extract response text
-        if response and response.text:
-            response_text = response.text.strip()
+        if response and response.candidates:
+            response_text = response.candidates[0].content.parts[0].text.strip()
             history.append((user_input, response_text))
         else:
             response_text = "Sorry, I couldn't fetch a response."
