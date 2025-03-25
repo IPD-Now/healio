@@ -60,10 +60,10 @@ async def dr_healio_chat(request: ChatRequest):
         ]
         tools = [types.Tool(google_search=types.GoogleSearch())]
         generate_content_config = types.GenerateContentConfig(
-            temperature=1,
-            top_p=0.95,
-            top_k=40,
-            max_output_tokens=8192,
+            temperature=0.9,
+            top_p=0.85,
+            top_k=30,
+            max_output_tokens=1500,
             tools=tools,
             response_mime_type="text/plain",
         )
