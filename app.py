@@ -21,7 +21,7 @@ except Exception as e:
 MODEL_NAME = "gemini-2.0-flash"
 
 # Fetch Dr. Healio Prompt from external source
-PROMPT_URL = "https://gist.githubusercontent.com/shudveta/3286f04b7bc36a94bb9b84065fdc64a0/raw/bbe3eabfab1588e32a13e1f644ec2a16fff989ef/prompt.txt"
+PROMPT_URL = "https://gist.githubusercontent.com/shudveta/3286f04b7bc36a94bb9b84065fdc64a0/raw/prompt.txt"
 try:
     response = requests.get(PROMPT_URL)
     response.raise_for_status()
