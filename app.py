@@ -1,4 +1,9 @@
 import os
+import base64
+import tempfile
+import wave
+import asyncio
+
 from google import genai
 from google.genai import types
 from fastapi import FastAPI, HTTPException
@@ -18,7 +23,7 @@ try:
 except Exception as e:
     raise ValueError(f"Failed to initialize genai client: {e}")
 
-MODEL_NAME = "gemini-2.0-flash"
+MODEL_NAME = "models/gemini-2.0-flash-live-001"
 
 # Fetch Dr. Healio Prompt from external source
 PROMPT_URL = "https://gist.githubusercontent.com/shudveta/3286f04b7bc36a94bb9b84065fdc64a0/raw/prompt.txt"
@@ -33,7 +38,7 @@ except requests.exceptions.RequestException as e:
 # Define request structure
 class ChatRequest(BaseModel):
     user_input: str
-    history: list = []  # History will be sent in the request
+    history: list = []
 
 @app.get("/")
 def read_root():
@@ -43,9 +48,8 @@ def read_root():
 async def dr_healio_chat(request: ChatRequest):
     try:
         user_input = request.user_input
-        history = request.history  # Received history from the request
+        history = request.history
 
-        # Construct full history
         full_history = DR_HEALIO_PROMPT + "\n" + "\n".join(
             [f"User: {msg[0]}\nDr. Healio: {msg[1]}" for msg in history]
         )
@@ -53,9 +57,7 @@ async def dr_healio_chat(request: ChatRequest):
         contents = [
             types.Content(
                 role="user",
-                parts=[
-                    types.Part.from_text(text=f"{full_history}\nUser: {user_input}\nDr. Healio:"),
-                ],
+                parts=[types.Part.from_text(text=f"{full_history}\nUser: {user_input}\nDr. Healio:")],
             ),
         ]
         tools = [types.Tool(google_search=types.GoogleSearch())]
@@ -77,13 +79,74 @@ async def dr_healio_chat(request: ChatRequest):
             if chunk.text:
                 response_text += chunk.text
 
-        # Append new interaction
         history.append((user_input, response_text))
-
         return {"response": response_text, "history": history}
 
     except Exception as e:
-        print(f"Error during dr_healio_chat: {e}") #Print error to logs.
+        print(f"Error during dr_healio_chat: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}")
+
+@app.post("/dr_healio_chat_voice")
+async def dr_healio_chat_voice(request: ChatRequest):
+    try:
+        user_input = request.user_input
+        history = request.history
+
+        full_history = DR_HEALIO_PROMPT + "\n" + "\n".join(
+            [f"User: {msg[0]}\nDr. Healio: {msg[1]}" for msg in history]
+        )
+
+        prompt_text = f"{full_history}\nUser: {user_input}\nDr. Healio:"
+
+        contents = [
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=prompt_text)],
+            ),
+        ]
+
+        config = types.LiveConnectConfig(
+            response_modalities=["audio"],
+            speech_config=types.SpeechConfig(
+                voice_config=types.VoiceConfig(
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Puck")
+                )
+            ),
+        )
+
+        audio_data = b""
+        response_text = ""
+
+        async with client.aio.live.connect(model=MODEL_NAME, config=config) as session:
+            await session.send(input=contents[0], end_of_turn=True)
+
+            turn = session.receive()
+            async for response in turn:
+                if response.data:
+                    audio_data += response.data
+                if response.text:
+                    response_text = response.text
+
+        # Convert PCM bytes to WAV file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
+            with wave.open(f.name, "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(24000)
+                wf.writeframes(audio_data)
+            f.seek(0)
+            audio_base64 = base64.b64encode(f.read()).decode("utf-8")
+
+        history.append((user_input, response_text))
+
+        return {
+            "response": response_text,
+            "audio_base64": audio_base64,
+            "history": history
+        }
+
+    except Exception as e:
+        print(f"Error during dr_healio_chat_voice: {e}")
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}")
 
 @app.post("/reset_chat")
