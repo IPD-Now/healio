@@ -4,3 +4,7 @@ requests
 python-dotenv
 gunicorn
 google-genai
+pyaudio 
+opencv-python 
+pillow
+mss 
