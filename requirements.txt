@@ -4,5 +4,7 @@ requests
 python-dotenv
 gunicorn
 google-genai
-pyaudio 
-sounddevice 
+opencv-python==4.5.5.64
+pillow==8.4.0
+mss==6.1.0
+pyaudio==0.2.11
