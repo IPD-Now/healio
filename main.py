@@ -3,7 +3,6 @@ import base64
 import tempfile
 import wave
 import asyncio
-
 from google import genai
 from google.genai import types
 from fastapi import FastAPI, HTTPException
@@ -23,7 +22,9 @@ try:
 except Exception as e:
     raise ValueError(f"Failed to initialize genai client: {e}")
 
-MODEL_NAME = "models/gemini-2.0-flash-live-001"
+# Define model names
+DEFAULT_MODEL = "gemini-2.0-flash"
+VOICE_MODEL = "models/gemini-2.0-flash-live-001"
 
 # Fetch Dr. Healio Prompt from external source
 PROMPT_URL = "https://gist.githubusercontent.com/shudveta/3286f04b7bc36a94bb9b84065fdc64a0/raw/prompt.txt"
@@ -72,7 +73,7 @@ async def dr_healio_chat(request: ChatRequest):
 
         response_text = ""
         for chunk in client.models.generate_content_stream(
-            model=MODEL_NAME,
+            model=DEFAULT_MODEL,  # Using default model for regular chat
             contents=contents,
             config=generate_content_config,
         ):
@@ -117,7 +118,7 @@ async def dr_healio_chat_voice(request: ChatRequest):
         audio_data = b""
         response_text = ""
 
-        async with client.aio.live.connect(model=MODEL_NAME, config=config) as session:
+        async with client.aio.live.connect(model=VOICE_MODEL, config=config) as session:
             await session.send(input=contents[0], end_of_turn=True)
 
             turn = session.receive()
