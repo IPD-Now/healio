@@ -23,7 +23,7 @@ except Exception as e:
     raise ValueError(f"Failed to initialize genai client: {e}")
 
 # Define model names
-DEFAULT_MODEL = "gemini-2.0-flash"
+DEFAULT_MODEL = "gemini-2.5-flash-preview-04-17"
 VOICE_MODEL = "models/gemini-2.0-flash-live-001"
 
 # Fetch Dr. Healio Prompt from external source
