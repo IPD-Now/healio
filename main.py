@@ -87,6 +87,11 @@ async def dr_healio_chat(request: ChatRequest):
         print(f"Error during dr_healio_chat: {e}")
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {e}")
 
+@app.get("/ping")
+def ping():
+    return {"status": "alive", "message": "Dr. Healio backend is up and running."}
+
+
 @app.post("/dr_healio_chat_voice")
 async def dr_healio_chat_voice(request: ChatRequest):
     try:
